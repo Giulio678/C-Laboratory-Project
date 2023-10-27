@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Verifica che almeno ci siano due argomenti
+if [ $# -lt 2 ]; then
+    echo "Utilizzo: $0 (--query|--loan) <file_di_testo> [altro_file_di_testo ...]"
+    exit 1
+fi
+
+# Estrai il primo argomento per verificare se è --query o --loan
+command="$1"
+shift
+
+# Verifica se il comando è valido
+if [ "$command" != "--query" ] && [ "$command" != "--loan" ]; then
+    echo "Comando non valido. Utilizzo: $0 (--query|--loan) <file_di_testo> [altro_file_di_testo ...]"
+    exit 1
+fi
+
+case "$command" in
+    --query)
+        comando="QUERY"  # Imposta il comando a "QUERY"
+        ;;
+    --loan)
+        comando="LOAN"   # Imposta il comando a "LOAN"
+        ;;
+    *)
+        echo "Comando non valido. Utilizzo: $0 (--query|--loan) <file_di_testo> [altro_file_di_testo ...]"
+        exit 1
+        ;;
+esac
+
+# Flag per il controllo del formato
+valid_format=true
+
+# Inizializza le variabili per il conteggio delle richieste e dei prestiti
+total_loans=0 #Prestiti totali
+total_query=0 #Query totali
+partial=0 #Serve per contare le occorrenze effettive  dei record nel file di log da poter confrontare poi con le occorrenze scritte in fondo al file
+
+# Loop attraverso gli argomenti (file di log)
+for file in "$@"; do
+    # Verifica che il file esista
+    if [ ! -f "$file" ]; then
+        echo "Il file '$file' non esiste."
+        valid_format=false
+        continue
+    fi
+
+    # Loop attraverso le righe del file
+    while IFS= read -r line; do
+        # Verifica se la riga è vuota o contiene solo spazi
+        if [[ "$line" =~ ^[[:space:]]*$ ]]; then
+            break
+        fi
+        # Controlla il formato di ogni riga
+        if [[ "$line" =~ ^autore:.*\;[^\;]*$ ]]; then #Se inizia con "autore:" e poi continua e finisce con ";" viene data per valida
+
+            partial=($((partial + 1))) #Conto un occorrenza in più
+        else
+            valid_format=false
+        fi
+    done < "$file"
+
+    # Estrae il primo elemento dall'ultima riga del file
+    parte_prima=$(echo "$(tail -n 1 "$file")" | cut -d' ' -f1)
+
+    #Controllo che il primo elemento dell'ultima riga del file log sia o QUERY o LOAN
+    if [[ $(tail -n 1 "$file") != *"$comando"* ]]; then
+        valid_format=false
+    fi
+
+    # Estrai il numero dall'ultima riga
+    numero=$(tail -n 1 "$file" | awk '{print $NF}')
+
+    #Controllo se la stringa è vuota
+    if [ -z "$numero" ]; then
+        valid_format=false
+    fi
+
+    #Controllo che le occorrenze siano uguali
+    if [ "$numero" -ne "$partial" ]; then
+        prestito=false
+    fi
+
+    if [ "$parte_prima" = "LOAN" ] && [ "$valid_format" = true ]; then
+        total_loans=$((total_loans + numero))
+    else
+        if [ "$valid_format" = true ]; then
+            total_query=$((total_query + numero))
+        fi
+    fi
+
+    if [ "$valid_format" = true ]; then
+        echo -e "$file $numero\n"
+    fi
+
+    partial=0
+
+    valid_format=true
+done
+
+if [ "$comando" = "QUERY" ]; then
+    echo "$comando $total_query" 
+else 
+    echo "$comando $total_loans"
+fi
