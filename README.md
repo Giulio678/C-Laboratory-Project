@@ -1,4 +1,4 @@
-# Progetto laboratorio 2 Biblioteca
+# Progetto Biblioteca
 
 ## Disposizione file e cartelle
 
